@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>3. Follow Camera - Carreras de Autos</title>
+<style>
+  html, body { margin:0; padding:0; overflow:hidden; width:100%; height:100%; background:#000; font-family: sans-serif; }
+  #renderCanvas { width:100%; height:100%; touch-action:none; }
+  #ui {
+    position:absolute; top:10px; left:10px; color:#4be2ff; background:rgba(10,10,15,0.75);
+    padding:14px 18px; border-radius:10px; border:1px solid #4be2ff55; font-size:14px; max-width:280px;
+  }
+  #ui h2 { margin:0 0 8px 0; font-size:16px; color:#fff; }
+  #ui label { display:block; margin-top:8px; }
+  #ui input[type=range]{ width:100%; }
+</style>
+</head>
+<body>
+<canvas id="renderCanvas"></canvas>
+<div id="ui">
+  <h2>🏎️ Simulador de Carreras</h2>
+  Flechas / WASD: acelerar y girar
+  <label>Distancia (radius): <span id="radiusVal">10</span>
+    <input type="range" id="radius" min="4" max="30" step="1" value="10">
+  </label>
+  <label>Altura (heightOffset): <span id="heightVal">4</span>
+    <input type="range" id="height" min="0" max="15" step="0.5" value="4">
+  </label>
+  <label>Ángulo (rotationOffset): <span id="rotVal">0</span>
+    <input type="range" id="rotOffset" min="0" max="360" step="1" value="0">
+  </label>
+  <label>Suavidad (cameraAcceleration): <span id="accelVal">0.05</span>
+    <input type="range" id="accel" min="0.01" max="0.3" step="0.01" value="0.05">
+  </label>
+</div>
+
+<script src="https://cdn.babylonjs.com/babylon.js"></script>
+<script>
+const canvas = document.getElementById("renderCanvas");
+const engine = new BABYLON.Engine(canvas, true);
+
+const createScene = function () {
+  const scene = new BABYLON.Scene(engine);
+  scene.clearColor = new BABYLON.Color4(0.03, 0.05, 0.08, 1);
+
+  const hemi = new BABYLON.HemisphericLight("hemi", new BABYLON.Vector3(0, 1, 0), scene);
+  hemi.intensity = 0.9;
+
+  // ---- Pista (carretera circular simple con marcas) ----
+  const ground = BABYLON.MeshBuilder.CreateGround("ground", { width: 200, height: 200 }, scene);
+  const groundMat = new BABYLON.StandardMaterial("groundMat", scene);
+  groundMat.diffuseColor = new BABYLON.Color3(0.08, 0.25, 0.1);
+  ground.material = groundMat;
+
+  const trackRadius = 40;
+  const track = BABYLON.MeshBuilder.CreateTorus("track", { diameter: trackRadius * 2, thickness: 12, tessellation: 64 }, scene);
+  track.rotation.x = Math.PI / 2;
+  track.position.y = 0.02;
+  const trackMat = new BABYLON.StandardMaterial("trackMat", scene);
+  trackMat.diffuseColor = new BABYLON.Color3(0.15, 0.15, 0.15);
+  track.material = trackMat;
+
+  // ---- Auto (el objetivo a seguir) ----
+  const car = BABYLON.MeshBuilder.CreateBox("car", { width: 2, height: 1, depth: 4 }, scene);
+  const carMat = new BABYLON.StandardMaterial("carMat", scene);
+  carMat.diffuseColor = new BABYLON.Color3(0.9, 0.8, 0.1);
+  car.material = carMat;
+  car.position = new BABYLON.Vector3(trackRadius, 0.6, 0);
+
+  // Faros simples
+  const headlight = new BABYLON.SpotLight("headlight", new BABYLON.Vector3(0, 0.5, 2), new BABYLON.Vector3(0, 0, 1), Math.PI / 4, 2, scene);
+  headlight.parent = car;
+  headlight.intensity = 0.6;
+
+  // ---- Cámara Follow ----
+  const camera = new BABYLON.FollowCamera("followCam", new BABYLON.Vector3(0, 6, -10), scene);
+  camera.lockedTarget = car;      // el objetivo debe ser un Mesh existente
+  camera.radius = 10;             // distancia detrás del auto
+  camera.heightOffset = 4;        // altura sobre el objetivo
+  camera.rotationOffset = 0;      // ángulo alrededor del objetivo (0 = detrás)
+  camera.cameraAcceleration = 0.05; // suavidad del movimiento
+  camera.maxCameraSpeed = 15;
+  camera.attachControl(canvas, true);
+
+  // ---- Control del auto: aceleración simple sobre una pista circular ----
+  const input = { forward: false, back: false, left: false, right: false };
+  window.addEventListener("keydown", (e) => {
+    if (["ArrowUp","KeyW"].includes(e.code)) input.forward = true;
+    if (["ArrowDown","KeyS"].includes(e.code)) input.back = true;
+    if (["ArrowLeft","KeyA"].includes(e.code)) input.left = true;
+    if (["ArrowRight","KeyD"].includes(e.code)) input.right = true;
+  });
+  window.addEventListener("keyup", (e) => {
+    if (["ArrowUp","KeyW"].includes(e.code)) input.forward = false;
+    if (["ArrowDown","KeyS"].includes(e.code)) input.back = false;
+    if (["ArrowLeft","KeyA"].includes(e.code)) input.left = false;
+    if (["ArrowRight","KeyD"].includes(e.code)) input.right = false;
+  });
+
+  let speed = 0;
+  let heading = Math.PI / 2; // ángulo del auto sobre el círculo
+
+  scene.onBeforeRenderObservable.add(() => {
+    const dt = engine.getDeltaTime() / 1000;
+    if (input.forward) speed = Math.min(speed + dt * 8, 12);
+    else if (input.back) speed = Math.max(speed - dt * 8, -6);
+    else speed *= 0.98;
+
+    if (input.left) heading += dt * (speed / trackRadius) * 1.2;
+    if (input.right) heading -= dt * (speed / trackRadius) * 1.2;
+    else if (!input.left) heading += dt * (speed / trackRadius); // sigue la curva natural de la pista
+
+    car.position.x = Math.cos(heading) * trackRadius;
+    car.position.z = Math.sin(heading) * trackRadius;
+    car.rotation.y = -heading + Math.PI / 2;
+  });
+
+  // ---- UI ----
+  document.getElementById("radius").addEventListener("input", (e) => {
+    camera.radius = parseFloat(e.target.value);
+    document.getElementById("radiusVal").textContent = e.target.value;
+  });
+  document.getElementById("height").addEventListener("input", (e) => {
+    camera.heightOffset = parseFloat(e.target.value);
+    document.getElementById("heightVal").textContent = e.target.value;
+  });
+  document.getElementById("rotOffset").addEventListener("input", (e) => {
+    camera.rotationOffset = parseFloat(e.target.value);
+    document.getElementById("rotVal").textContent = e.target.value;
+  });
+  document.getElementById("accel").addEventListener("input", (e) => {
+    camera.cameraAcceleration = parseFloat(e.target.value);
+    document.getElementById("accelVal").textContent = e.target.value;
+  });
+
+  return scene;
+};
+
+const scene = createScene();
+engine.runRenderLoop(() => scene.render());
+window.addEventListener("resize", () => engine.resize());
+</script>
+</body>
+</html>

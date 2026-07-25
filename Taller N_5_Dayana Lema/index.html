@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Taller de Cámaras en Babylon.js</title>
+<style>
+  * { box-sizing: border-box; }
+  @keyframes floaty { 0%,100% { transform: translateY(0px); } 50% { transform: translateY(-6px); } }
+  @keyframes glow { 0%,100% { text-shadow: 0 0 20px #4be2ff88, 0 0 40px #2b8fff44; } 50% { text-shadow: 0 0 30px #4be2ffcc, 0 0 60px #2b8fff88; } }
+  body {
+    margin:0; min-height:100vh;
+    background: radial-gradient(circle at 20% 20%, #0a2a4a 0%, #050914 55%, #020208 100%);
+    color:#e8f9ff;
+    font-family: 'Segoe UI', sans-serif; display:flex; flex-direction:column; align-items:center;
+    padding:50px 20px;
+  }
+  h1 {
+    color:#5fd8ff; margin-bottom:6px; font-size:2.4em; animation: glow 3s ease-in-out infinite;
+  }
+  p.sub { color:#8bb8e8; margin-top:0; font-size:1.05em; }
+  .grid {
+    display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap:20px; width:100%; max-width:1050px; margin-top:36px;
+  }
+  a.card {
+    display:block; background:linear-gradient(160deg, #10233d, #0a1526);
+    border:1px solid #2e6fb055; border-radius:16px;
+    padding:22px; text-decoration:none; color:#fff; transition: 0.2s;
+    box-shadow: 0 4px 18px #00102040;
+    position:relative; overflow:hidden;
+  }
+  a.card::before {
+    content:""; position:absolute; top:-40%; left:-40%; width:180%; height:180%;
+    background: radial-gradient(circle, #4be2ff22, transparent 60%);
+    opacity:0; transition: 0.3s;
+  }
+  a.card:hover::before { opacity:1; }
+  a.card:hover {
+    border-color:#4be2ff; transform: translateY(-6px) scale(1.02);
+    box-shadow: 0 10px 30px #2b8fff44;
+  }
+  a.card .emoji { font-size:2em; display:inline-block; animation: floaty 2.5s ease-in-out infinite; }
+  a.card .num { color:#4be2ff; font-weight:bold; font-size:13px; letter-spacing:0.5px; }
+  a.card h3 { margin:8px 0 4px 0; font-size:19px; }
+  a.card p { margin:0; color:#9fc3e8; font-size:13px; }
+  footer { margin-top:50px; color:#3f6a99; font-size:12px; }
+</style>
+</head>
+<body>
+  <h1>🎥 Taller de Cámaras </h1>
+  <p class="sub">¡A explorar el espacio 3D!</p>
+  <div class="grid">
+    <a class="card" href="proyectos/01_universal_camera_laberinto.html">
+      <span class="emoji">🌀</span>
+      <div class="num">01 · UNIVERSAL CAMERA</div>
+      <h3>Laberinto de Escape</h3>
+      <p>FPS con gravedad, colisiones y una salida brillante que encontrar.</p>
+    </a>
+    <a class="card" href="proyectos/02_arcrotate_sistema_solar.html">
+      <span class="emoji">🪐</span>
+      <div class="num">02 · ARC ROTATE CAMERA</div>
+      <h3>Sistema Solar</h3>
+      <p>Órbitas reales controladas por alpha, beta y radius.</p>
+    </a>
+    <a class="card" href="proyectos/03_follow_camera_carreras.html">
+      <span class="emoji">🏎️</span>
+      <div class="num">03 · FOLLOW CAMERA</div>
+      <h3>Simulador de Carreras</h3>
+      <p>Pista con línea de meta y contador de vueltas.</p>
+    </a>
+    <a class="card" href="proyectos/04_fly_camera_dron_ciudad.html">
+      <span class="emoji">🚁</span>
+      <div class="num">04 · FLY CAMERA</div>
+      <h3>Simulador de Drones</h3>
+      <p>Misión clara: vuela a través de los aros flotantes.</p>
+    </a>
+    <a class="card" href="proyectos/05_device_orientation_tour360.html">
+      <span class="emoji">🏟️</span>
+      <div class="num">05 · DEVICE ORIENTATION</div>
+      <h3>Tour 360: Estadio</h3>
+      <p>Giroscopio del dispositivo + fallback de mouse.</p>
+    </a>
+  </div>
+  <footer>Hecho con Babylon.js ✦ WebGL</footer>
+</body>
+</html>

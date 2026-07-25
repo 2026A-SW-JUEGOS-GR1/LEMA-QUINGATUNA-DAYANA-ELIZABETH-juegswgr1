@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>2. ArcRotate Camera - Sistema Solar</title>
+<style>
+  html, body { margin:0; padding:0; overflow:hidden; width:100%; height:100%; background:#000; font-family: sans-serif; }
+  #renderCanvas { width:100%; height:100%; touch-action:none; }
+  #ui {
+    position:absolute; top:10px; left:10px; color:#4be2ff; background:rgba(10,10,15,0.75);
+    padding:14px 18px; border-radius:10px; border:1px solid #4be2ff55; font-size:14px; max-width:280px;
+  }
+  #ui h2 { margin:0 0 8px 0; font-size:16px; color:#fff; }
+  #ui label { display:block; margin-top:8px; }
+  #ui select, #ui input[type=range]{ width:100%; }
+</style>
+</head>
+<body>
+<canvas id="renderCanvas"></canvas>
+<div id="ui">
+  <h2>🪐 Sistema Solar</h2>
+  Arrastra para orbitar · Scroll para zoom
+  <label>Enfocar:
+    <select id="targetSelect">
+      <option value="sun">Sol</option>
+      <option value="mercury">Mercurio</option>
+      <option value="earth">Tierra</option>
+      <option value="mars">Marte</option>
+      <option value="jupiter">Júpiter</option>
+    </select>
+  </label>
+  <label>Velocidad orbital: <span id="speedVal">1.0</span>
+    <input type="range" id="speed" min="0" max="3" step="0.1" value="1">
+  </label>
+  <label>Radio (zoom): <span id="radiusVal"></span>
+    <input type="range" id="radius" min="5" max="80" step="1" value="30">
+  </label>
+</div>
+
+<script src="https://cdn.babylonjs.com/babylon.js"></script>
+<script>
+const canvas = document.getElementById("renderCanvas");
+const engine = new BABYLON.Engine(canvas, true);
+
+let orbitSpeed = 1.0;
+
+const createScene = function () {
+  const scene = new BABYLON.Scene(engine);
+  scene.clearColor = new BABYLON.Color4(0, 0, 0.02, 1);
+
+  // ---- Cámara ArcRotate (orbital) ----
+  const camera = new BABYLON.ArcRotateCamera(
+    "arcCam",
+    -Math.PI / 2, // alpha (ángulo horizontal)
+    Math.PI / 2.5, // beta (ángulo vertical)
+    30, // radius (distancia)
+    BABYLON.Vector3.Zero(),
+    scene
+  );
+  camera.attachControl(canvas, true); // permite arrastrar/zoom con el usuario
+  camera.lowerRadiusLimit = 4;
+  camera.upperRadiusLimit = 80;
+  camera.wheelPrecision = 20;
+
+  // ---- Luz del Sol ----
+  const sunLight = new BABYLON.PointLight("sunLight", BABYLON.Vector3.Zero(), scene);
+  sunLight.intensity = 2;
+
+  // ---- Fondo estrellado simple ----
+  const starDome = BABYLON.MeshBuilder.CreateSphere("stars", { diameter: 400, sideOrientation: BABYLON.Mesh.BACKSIDE }, scene);
+  const starMat = new BABYLON.StandardMaterial("starMat", scene);
+  starMat.diffuseColor = new BABYLON.Color3(0, 0, 0);
+  starMat.emissiveColor = new BABYLON.Color3(0.02, 0.02, 0.05);
+  starMat.disableLighting = true;
+  starDome.material = starMat;
+
+  // ---- Sol ----
+  const sun = BABYLON.MeshBuilder.CreateSphere("sun", { diameter: 4 }, scene);
+  const sunMat = new BABYLON.StandardMaterial("sunMat", scene);
+  sunMat.emissiveColor = new BABYLON.Color3(1, 0.7, 0.1);
+  sunMat.disableLighting = true;
+  sun.material = sunMat;
+
+  // ---- Función para crear planetas con órbita real (Kepler simplificado) ----
+  function createPlanet(name, diameter, color, orbitRadius, orbitPeriod, tilt) {
+    const planet = BABYLON.MeshBuilder.CreateSphere(name, { diameter }, scene);
+    const mat = new BABYLON.StandardMaterial(name + "Mat", scene);
+    mat.diffuseColor = color;
+    mat.specularColor = new BABYLON.Color3(0.05, 0.05, 0.05);
+    planet.material = mat;
+
+    // Línea de órbita (visual)
+    const points = [];
+    for (let i = 0; i <= 128; i++) {
+      const a = (i / 128) * Math.PI * 2;
+      points.push(new BABYLON.Vector3(Math.cos(a) * orbitRadius, 0, Math.sin(a) * orbitRadius));
+    }
+    const orbitLine = BABYLON.MeshBuilder.CreateLines(name + "Orbit", { points }, scene);
+    orbitLine.color = new BABYLON.Color3(0.2, 0.3, 0.35);
+
+    planet.metadata = { orbitRadius, orbitPeriod, angle: Math.random() * Math.PI * 2 };
+    return planet;
+  }
+
+  const mercury = createPlanet("mercury", 0.6, new BABYLON.Color3(0.6, 0.55, 0.5), 6, 0.24, 0);
+  const venus   = createPlanet("venus", 1.0, new BABYLON.Color3(0.8, 0.7, 0.4), 9, 0.62, 0);
+  const earth   = createPlanet("earth", 1.1, new BABYLON.Color3(0.2, 0.4, 0.8), 13, 1.0, 0);
+  const mars    = createPlanet("mars", 0.7, new BABYLON.Color3(0.7, 0.3, 0.2), 17, 1.88, 0);
+  const jupiter = createPlanet("jupiter", 2.4, new BABYLON.Color3(0.7, 0.6, 0.5), 26, 11.86, 0);
+
+  const planets = { sun, mercury, venus, earth, mars, jupiter };
+
+  // ---- Animación orbital (velocidad angular ~ 1/periodo, como Kepler simplificado) ----
+  scene.onBeforeRenderObservable.add(() => {
+    const dt = engine.getDeltaTime() / 1000;
+    [mercury, venus, earth, mars, jupiter].forEach((p) => {
+      const m = p.metadata;
+      m.angle += (dt * orbitSpeed) / m.orbitPeriod;
+      p.position.x = Math.cos(m.angle) * m.orbitRadius;
+      p.position.z = Math.sin(m.angle) * m.orbitRadius;
+      p.rotation.y += dt * 2; // rotación sobre su propio eje
+    });
+    sun.rotation.y += dt * 0.1;
+  });
+
+  // ---- UI ----
+  document.getElementById("targetSelect").addEventListener("change", (e) => {
+    camera.setTarget(planets[e.target.value]);
+  });
+  document.getElementById("speed").addEventListener("input", (e) => {
+    orbitSpeed = parseFloat(e.target.value);
+    document.getElementById("speedVal").textContent = orbitSpeed.toFixed(1);
+  });
+ document.getElementById("radius").addEventListener("input", (e) => {
+    camera.radius = parseFloat(e.target.value);
+    document.getElementById("radiusVal").textContent = e.target.value;
+  });
+  document.getElementById("radiusVal").textContent = camera.radius;
+
+  return scene;
+};
+
+const scene = createScene();
+engine.runRenderLoop(() => scene.render());
+window.addEventListener("resize", () => engine.resize());
+</script>
+</body>
+</html>

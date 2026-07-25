@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>1. Universal Camera - Laberinto de Escape</title>
+<style>
+  html, body { margin:0; padding:0; overflow:hidden; width:100%; height:100%; background:#000; font-family: sans-serif; }
+  #renderCanvas { width:100%; height:100%; touch-action:none; }
+  #ui {
+    position:absolute; top:10px; left:10px; color:#4be2ff; background:rgba(10,10,15,0.75);
+    padding:14px 18px; border-radius:10px; border:1px solid #4be2ff55; font-size:14px; max-width:280px;
+  }
+  #ui h2 { margin:0 0 8px 0; font-size:16px; color:#fff; }
+  #ui label { display:block; margin-top:8px; }
+  #ui input[type=range]{ width:100%; }
+  #crosshair {
+    position:absolute; top:50%; left:50%; width:6px; height:6px; margin:-3px 0 0 -3px;
+    border-radius:50%; background:#4be2ffaa;
+  }
+</style>
+</head>
+<body>
+<canvas id="renderCanvas"></canvas>
+<div id="crosshair"></div>
+<div id="ui">
+  <h2>🌀 Laberinto de Escape</h2>
+  WASD para moverte · Mouse para mirar · Click para bloquear el cursor
+  <label>Gravedad: <span id="gravVal">-0.9</span>
+    <input type="range" id="gravity" min="-2" max="-0.1" step="0.1" value="-0.9">
+  </label>
+  <label>Velocidad: <span id="speedVal">0.35</span>
+    <input type="range" id="speed" min="0.1" max="1" step="0.05" value="0.35">
+  </label>
+  <label>Salto: <span id="jumpVal">0.28</span>
+    <input type="range" id="jump" min="0.1" max="0.6" step="0.02" value="0.28">
+  </label>
+</div>
+
+<script src="https://cdn.babylonjs.com/babylon.js"></script>
+<script>
+const canvas = document.getElementById("renderCanvas");
+const engine = new BABYLON.Engine(canvas, true, { stencil: true });
+
+let jumpForce = 0.28;
+let isGrounded = true;
+
+const createScene = function () {
+  const scene = new BABYLON.Scene(engine);
+  scene.clearColor = new BABYLON.Color4(0.02, 0.02, 0.04, 1);
+  scene.collisionsEnabled = true;
+  scene.gravity = new BABYLON.Vector3(0, -0.9, 0);
+  scene.fogMode = BABYLON.Scene.FOGMODE_EXP;
+  scene.fogDensity = 0.02;
+  scene.fogColor = new BABYLON.Color3(0.02, 0.02, 0.05);
+
+  // ---- Cámara Universal (FPS) ----
+  const camera = new BABYLON.UniversalCamera("fpsCam", new BABYLON.Vector3(0, 2, -8), scene);
+  camera.setTarget(new BABYLON.Vector3(0, 2, 0));
+  camera.attachControl(canvas, true); // IMPORTANTE: attachControl para que el usuario interactúe
+  camera.applyGravity = true;
+  camera.checkCollisions = true;
+  camera.ellipsoid = new BABYLON.Vector3(0.6, 1, 0.6); // colisión tipo cápsula
+  camera.minZ = 0.1;
+  camera.speed = 0.35;
+  camera.angularSensibility = 3000;
+  camera.keysUp.push(87);    // W
+  camera.keysDown.push(83);  // S
+  camera.keysLeft.push(65);  // A
+  camera.keysRight.push(68); // D
+
+  // Salto con barra espaciadora
+  scene.onKeyboardObservable.add((kbInfo) => {
+    if (kbInfo.type === BABYLON.KeyboardEventTypes.KEYDOWN && kbInfo.event.code === "Space") {
+      if (isGrounded) {
+        camera.cameraDirection.y += jumpForce;
+        isGrounded = false;
+        setTimeout(() => isGrounded = true, 700);
+      }
+    }
+  });
+
+  // Pointer lock al hacer click
+  canvas.addEventListener("click", () => canvas.requestPointerLock && canvas.requestPointerLock());
+
+  // ---- Luces ----
+  const hemi = new BABYLON.HemisphericLight("hemi", new BABYLON.Vector3(0, 1, 0), scene);
+  hemi.intensity = 0.25;
+  const torchLight = new BABYLON.PointLight("torch", new BABYLON.Vector3(0, 2.2, -8), scene);
+  torchLight.diffuse = new BABYLON.Color3(1, 0.6, 0.3);
+  torchLight.intensity = 0.9;
+  torchLight.parent = camera;
+
+  // ---- Suelo ----
+  const ground = BABYLON.MeshBuilder.CreateGround("ground", { width: 40, height: 40 }, scene);
+  const groundMat = new BABYLON.StandardMaterial("groundMat", scene);
+  groundMat.diffuseColor = new BABYLON.Color3(0.12, 0.1, 0.1);
+  ground.material = groundMat;
+  ground.checkCollisions = true;
+
+  // ---- Generación de laberinto simple (grid de paredes) ----
+  const wallMat = new BABYLON.StandardMaterial("wallMat", scene);
+  wallMat.diffuseColor = new BABYLON.Color3(0.2, 0.05, 0.05);
+  wallMat.emissiveColor = new BABYLON.Color3(0.05, 0.01, 0.01);
+
+  // Layout: 1 = pared, 0 = pasillo
+  const layout = [
+    "1111111111",
+    "1000000001",
+    "1011110101",
+    "1010000101",
+    "1010111101",
+    "1000100001",
+    "1110100111",
+    "1000100001",
+    "1011111101",
+    "1111111111"
+  ];
+  const cellSize = 4;
+  const offset = (layout.length * cellSize) / 2;
+
+  layout.forEach((row, z) => {
+    for (let x = 0; x < row.length; x++) {
+      if (row[x] === "1") {
+        const wall = BABYLON.MeshBuilder.CreateBox("wall", { width: cellSize, height: 4, depth: cellSize }, scene);
+        wall.position = new BABYLON.Vector3(x * cellSize - offset, 2, z * cellSize - offset);
+        wall.material = wallMat;
+        wall.checkCollisions = true;
+      }
+    }
+  });
+
+  // Reposicionar cámara en un pasillo libre
+  camera.position = new BABYLON.Vector3(1 * cellSize - offset, 2, 1 * cellSize - offset);
+
+  // ---- UI: controles en vivo ----
+  document.getElementById("gravity").addEventListener("input", (e) => {
+    const v = parseFloat(e.target.value);
+    scene.gravity.y = v;
+    document.getElementById("gravVal").textContent = v.toFixed(1);
+  });
+  document.getElementById("speed").addEventListener("input", (e) => {
+    const v = parseFloat(e.target.value);
+    camera.speed = v;
+    document.getElementById("speedVal").textContent = v.toFixed(2);
+  });
+  document.getElementById("jump").addEventListener("input", (e) => {
+    jumpForce = parseFloat(e.target.value);
+    document.getElementById("jumpVal").textContent = jumpForce.toFixed(2);
+  });
+
+  return scene;
+};
+
+const scene = createScene();
+engine.runRenderLoop(() => scene.render());
+window.addEventListener("resize", () => engine.resize());
+</script>
+</body>
+</html>

@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>5. Device Orientation Camera - Tour 360 Estadio</title>
+<style>
+  html, body { margin:0; padding:0; overflow:hidden; width:100%; height:100%; background:#000; font-family: sans-serif; }
+  #renderCanvas { width:100%; height:100%; touch-action:none; }
+  #ui {
+    position:absolute; top:10px; left:10px; color:#4be2ff; background:rgba(10,10,15,0.75);
+    padding:14px 18px; border-radius:10px; border:1px solid #4be2ff55; font-size:14px; max-width:300px;
+  }
+  #ui h2 { margin:0 0 8px 0; font-size:16px; color:#fff; }
+  #ui button {
+    margin-top:10px; background:#4be2ff; color:#001; border:none; padding:8px 14px;
+    border-radius:6px; font-weight:bold; cursor:pointer;
+  }
+</style>
+</head>
+<body>
+<canvas id="renderCanvas"></canvas>
+<div id="ui">
+  <h2>🏟️ Tour 360: Estadio</h2>
+  En móvil: mueve el dispositivo físicamente para mirar alrededor (usa el giroscopio).<br>
+  En escritorio: arrastra el mouse para probar la vista (fallback).
+  <br>
+  <button id="permBtn">Activar sensores (iOS)</button>
+</div>
+
+<script src="https://cdn.babylonjs.com/babylon.js"></script>
+<script>
+const canvas = document.getElementById("renderCanvas");
+const engine = new BABYLON.Engine(canvas, true);
+
+const createScene = function () {
+  const scene = new BABYLON.Scene(engine);
+  scene.clearColor = new BABYLON.Color4(0.5, 0.7, 0.95, 1);
+
+  const light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
+  light.intensity = 1.0;
+
+  // ---- Cámara DeviceOrientation (usa el giroscopio del dispositivo) ----
+  const camera = new BABYLON.DeviceOrientationCamera("doCam", new BABYLON.Vector3(0, 5, 0), scene);
+  camera.attachControl(canvas, true); // habilita también fallback de mouse/touch en desktop
+  camera.minZ = 0.1;
+  camera.speed = 0; // fijamos posición, solo rota (típico de un "tour" 360)
+
+  // ---- Estadio procedural: cancha + gradas circulares ----
+  const pitch = BABYLON.MeshBuilder.CreateGround("pitch", { width: 68, height: 105 }, scene);
+  const pitchMat = new BABYLON.StandardMaterial("pitchMat", scene);
+  pitchMat.diffuseColor = new BABYLON.Color3(0.1, 0.5, 0.15);
+  pitch.material = pitchMat;
+
+  // líneas de cancha
+  const lineMat = new BABYLON.StandardMaterial("lineMat", scene);
+  lineMat.diffuseColor = new BABYLON.Color3(1, 1, 1);
+  lineMat.alpha = 0.9;
+  const centerLine = BABYLON.MeshBuilder.CreateGround("centerLine", { width: 68, height: 0.3 }, scene);
+  centerLine.position.y = 0.01;
+  centerLine.material = lineMat;
+  const centerCircle = BABYLON.MeshBuilder.CreateTorus("centerCircle", { diameter: 18, thickness: 0.3, tessellation: 48 }, scene);
+  centerCircle.rotation.x = Math.PI / 2;
+  centerCircle.position.y = 0.01;
+  centerCircle.material = lineMat;
+
+  // Gradas: anillos concéntricos alrededor del estadio
+  const standMat = new BABYLON.StandardMaterial("standMat", scene);
+  standMat.diffuseColor = new BABYLON.Color3(0.35, 0.35, 0.4);
+
+  for (let ring = 0; ring < 3; ring++) {
+    const innerR = 70 + ring * 15;
+    const stand = BABYLON.MeshBuilder.CreateTorus("stand" + ring, {
+      diameter: innerR * 2, thickness: 14, tessellation: 64
+    }, scene);
+    stand.rotation.x = Math.PI / 2;
+    stand.position.y = 8 + ring * 6;
+    stand.material = standMat;
+  }
+
+  // Techo/skydome simple con "nubes" proceduralmente vía color
+  const sky = BABYLON.MeshBuilder.CreateSphere("sky", { diameter: 500, sideOrientation: BABYLON.Mesh.BACKSIDE }, scene);
+  const skyMat = new BABYLON.StandardMaterial("skyMat", scene);
+  skyMat.diffuseColor = new BABYLON.Color3(0, 0, 0);
+  skyMat.emissiveColor = new BABYLON.Color3(0.55, 0.75, 0.95);
+  skyMat.disableLighting = true;
+  sky.material = skyMat;
+
+  // Reflectores del estadio (torres de luz)
+  const lightTowerMat = new BABYLON.StandardMaterial("towerMat", scene);
+  lightTowerMat.diffuseColor = new BABYLON.Color3(0.2, 0.2, 0.2);
+  const positions = [[40, 60], [-40, 60], [40, -60], [-40, -60]];
+  positions.forEach((p, i) => {
+    const tower = BABYLON.MeshBuilder.CreateCylinder("tower" + i, { height: 30, diameter: 1.5 }, scene);
+    tower.position = new BABYLON.Vector3(p[0], 15, p[1]);
+    tower.material = lightTowerMat;
+    const spot = new BABYLON.SpotLight("spot" + i, new BABYLON.Vector3(p[0], 30, p[1]),
+      new BABYLON.Vector3(-p[0], -30, -p[1]).normalize(), Math.PI / 3, 2, scene);
+    spot.intensity = 0.5;
+  });
+
+  // ---- Solicitar permiso de sensores (requerido en iOS 13+) ----
+  document.getElementById("permBtn").addEventListener("click", () => {
+    if (typeof DeviceOrientationEvent !== "undefined" &&
+        typeof DeviceOrientationEvent.requestPermission === "function") {
+      DeviceOrientationEvent.requestPermission()
+        .then((response) => {
+          if (response === "granted") {
+            alert("Sensores activados. ¡Mueve el dispositivo para mirar alrededor!");
+          } else {
+            alert("Permiso denegado. Usa el fallback de mouse/touch.");
+          }
+        })
+        .catch(console.error);
+    } else {
+      alert("Este dispositivo no requiere permiso explícito, o no soporta el giroscopio. Prueba con el mouse.");
+    }
+  });
+
+  return scene;
+};
+
+const scene = createScene();
+engine.runRenderLoop(() => scene.render());
+window.addEventListener("resize", () => engine.resize());
+</script>
+</body>
+</html>

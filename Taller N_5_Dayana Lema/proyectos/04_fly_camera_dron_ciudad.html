@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>4. Fly Camera - Simulador de Drones</title>
+<style>
+  html, body { margin:0; padding:0; overflow:hidden; width:100%; height:100%; background:#000; font-family: sans-serif; }
+  #renderCanvas { width:100%; height:100%; touch-action:none; }
+  #ui {
+    position:absolute; top:10px; left:10px; color:#4be2ff; background:rgba(10,10,15,0.75);
+    padding:14px 18px; border-radius:10px; border:1px solid #4be2ff55; font-size:14px; max-width:300px;
+  }
+  #ui h2 { margin:0 0 8px 0; font-size:16px; color:#fff; }
+  #ui label { display:block; margin-top:8px; }
+  #ui input[type=range]{ width:100%; }
+</style>
+</head>
+<body>
+<canvas id="renderCanvas"></canvas>
+<div id="ui">
+  <h2>🚁 Simulador de Drones</h2>
+  W/S: avanzar/retroceder · A/D: yaw · Q/E: roll (giro/banked turn) · R/F: subir/bajar · Click para bloquear mouse
+  <label>Velocidad de banco (bankedTurn): <span id="bankVal">activado</span>
+    <input type="range" id="bankSpeed" min="0" max="10" step="0.5" value="2">
+  </label>
+  <label>Velocidad de vuelo: <span id="speedVal">50</span>
+    <input type="range" id="flySpeed" min="10" max="150" step="5" value="50">
+  </label>
+</div>
+
+<script src="https://cdn.babylonjs.com/babylon.js"></script>
+<script>
+const canvas = document.getElementById("renderCanvas");
+const engine = new BABYLON.Engine(canvas, true);
+
+const createScene = function () {
+  const scene = new BABYLON.Scene(engine);
+  scene.clearColor = new BABYLON.Color4(0.4, 0.6, 0.85, 1); // cielo diurno
+
+  const sun = new BABYLON.HemisphericLight("sun", new BABYLON.Vector3(0.3, 1, 0.2), scene);
+  sun.intensity = 1.1;
+
+  // ---- Suelo tipo ciudad ----
+  const ground = BABYLON.MeshBuilder.CreateGround("ground", { width: 400, height: 400 }, scene);
+  const groundMat = new BABYLON.StandardMaterial("groundMat", scene);
+  groundMat.diffuseColor = new BABYLON.Color3(0.25, 0.25, 0.28);
+  ground.material = groundMat;
+
+  // ---- Edificios generados aleatoriamente ----
+  const buildingMat = new BABYLON.StandardMaterial("buildingMat", scene);
+  buildingMat.diffuseColor = new BABYLON.Color3(0.5, 0.55, 0.6);
+
+  const emissiveMat = new BABYLON.StandardMaterial("windowsMat", scene);
+  emissiveMat.diffuseColor = new BABYLON.Color3(0.2, 0.25, 0.3);
+  emissiveMat.emissiveColor = new BABYLON.Color3(1, 0.85, 0.4);
+
+  for (let i = 0; i < 60; i++) {
+    const w = 6 + Math.random() * 10;
+    const d = 6 + Math.random() * 10;
+    const h = 15 + Math.random() * 70;
+    const building = BABYLON.MeshBuilder.CreateBox("b" + i, { width: w, height: h, depth: d }, scene);
+    const gridX = (Math.floor(Math.random() * 12) - 6) * 25;
+    const gridZ = (Math.floor(Math.random() * 12) - 6) * 25;
+    building.position = new BABYLON.Vector3(gridX + (Math.random()*6-3), h / 2, gridZ + (Math.random()*6-3));
+    building.material = Math.random() > 0.4 ? buildingMat : emissiveMat;
+  }
+
+  // ---- Fly Camera (vuelo libre con pitch/roll/yaw) ----
+  const camera = new BABYLON.FlyCamera("flyCam", new BABYLON.Vector3(0, 40, -100), scene);
+  camera.setTarget(BABYLON.Vector3.Zero());
+  camera.attachControl(canvas, true); // habilita interacción del usuario
+  camera.speed = 50;
+  camera.rollCorrect = 0;         // 0 = permite mantener el "banked turn" sin autocorrección
+  camera.bankedTurn = true;       // inclinación al girar, como un dron/avión real
+  camera.bankedTurnMultiplier = 2;
+  camera.bankedTurnLimit = Math.PI / 4;
+
+  // Remapear teclas para que sea más intuitivo (WASDQE)
+  camera.keysForward = [87];   // W
+  camera.keysBackward = [83];  // S
+  camera.keysUp = [82];        // R (subir)
+  camera.keysDown = [70];      // F (bajar)
+  camera.keysLeft = [65];      // A (yaw izquierda)
+  camera.keysRight = [68];     // D (yaw derecha)
+  camera.keysRollLeft = [81];  // Q (roll)
+  camera.keysRollRight = [69]; // E (roll)
+
+  canvas.addEventListener("click", () => canvas.requestPointerLock && canvas.requestPointerLock());
+
+  // ---- UI ----
+  document.getElementById("bankSpeed").addEventListener("input", (e) => {
+    camera.bankedTurnMultiplier = parseFloat(e.target.value);
+    document.getElementById("bankVal").textContent = e.target.value;
+  });
+  document.getElementById("flySpeed").addEventListener("input", (e) => {
+    camera.speed = parseFloat(e.target.value);
+    document.getElementById("speedVal").textContent = e.target.value;
+  });
+
+  return scene;
+};
+
+const scene = createScene();
+engine.runRenderLoop(() => scene.render());
+window.addEventListener("resize", () => engine.resize());
+</script>
+</body>
+</html>
